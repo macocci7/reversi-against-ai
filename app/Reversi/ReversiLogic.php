@@ -10,7 +10,7 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Responses\AgentResponse;
 use Macocci7\BashColorizer\Colorizer;
 
-use function Laravel\Prompts\{spin, text, select, error};
+use function Laravel\Prompts\{spin, text, select, warning, error};
 
 class ReversiLogic
 {
@@ -140,9 +140,9 @@ class ReversiLogic
     /**
      * セル選択分岐
      */
-    public function decideCell(Player $currentPlayer, int $turn): void
+    public function decideCell(Player $currentPlayer, int $turn): ?Cell
     {
-        $cell = match ($currentPlayer->getType()) {
+        return match ($currentPlayer->getType()) {
             PlayerTypeEnum::HUMAN => $this->humanDecidesCell($currentPlayer, $turn),
             PlayerTypeEnum::AI => $this->aiDecidesCell($currentPlayer, $turn),
         };
@@ -155,18 +155,19 @@ class ReversiLogic
     {
         $availableCells = $this->board->getAvailableCells($currentPlayer);
         if (empty($availableCells)) {
-            $this->passTheTurn($currentPlayer);
-            return null;    // パス
+            warning("配置できるセルがありません。パスします。");
+            $cell = null;   // パス
+        } else {
+            $options = array_map(fn($c) => $c->getRow() . '行 ' . $c->getCol() . '列', $availableCells);
+            $choice = select(
+                label: "ターン {$turn}、" . $currentPlayer->getName() . "の番です。どのセルを選びますか？",
+                options: $options,
+                scroll: 3,
+            );
+            $chosenIndex = array_search($choice, $options);
+            $chosenCell = $availableCells[$chosenIndex];
+            $cell = new Cell($chosenCell->getRow(), $chosenCell->getCol(), $currentPlayer);
         }
-        $options = array_map(fn($c) => $c->getRow() . '行 ' . $c->getCol() . '列', $availableCells);
-        $choice = select(
-            label: "ターン {$turn}、" . $currentPlayer->getName() . "の番です。どのセルを選びますか？",
-            options: $options,
-            scroll: 3,
-        );
-        $chosenIndex = array_search($choice, $options);
-        $chosenCell = $availableCells[$chosenIndex];
-        $cell = new Cell($chosenCell->getRow(), $chosenCell->getCol(), $currentPlayer);
         if (! $this->option->noConversation) {
             $this->userComment = text(
                 label: "相手へのコメントをどうぞ",
@@ -176,6 +177,7 @@ class ReversiLogic
             ) ?? "";
         }
         $this->board->setCell($cell, $this->userComment);
+        return $cell;
     }
 
     /**
@@ -188,7 +190,7 @@ class ReversiLogic
             ->echo("ターン {$turn}、" . $currentPlayer->getName() . "の番です。", PHP_EOL);
         $availableCells = $this->board->getAvailableCells($currentPlayer);
         if (empty($availableCells)) {
-            return null;    // パス
+            warning("配置できるセルがありません。パスします。");
         }
         $error = "";
         $maxAttempts = 3;
@@ -210,7 +212,10 @@ class ReversiLogic
             $choiceDecoded = json_decode($choice, true);
             $this->userComment = $choiceDecoded["comment"] ?? "";
             $comment = $choiceDecoded["comment"] ?? "(No comment)";
-            $cell = json_decode($choiceDecoded["cell"] ?? "[]", true);
+            $cell = empty($availableCells) ? null : json_decode($choiceDecoded["cell"] ?? "[]", true);
+            if (empty($availableCells)) {
+                break;  // パス
+            }
             if (empty($cell)) {
                 $error = "AIがセルを選択できませんでした。選び直してください。";
                 error($error);
@@ -243,6 +248,7 @@ class ReversiLogic
             echo " " . $comment . PHP_EOL;
         }
         $this->board->setCell($cell, $this->option->noConversation ? "" : $comment);
+        return $cell;
     }
 
     /**

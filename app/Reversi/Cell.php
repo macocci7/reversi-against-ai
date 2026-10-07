@@ -37,6 +37,11 @@ class Cell
         return $this->player;
     }
 
+    public function flip(Player $player): void
+    {
+        $this->player = $player;
+    }
+
     public function isEmpty(): bool
     {
         return $this->player->getType() === PlayerTypeEnum::NONE;

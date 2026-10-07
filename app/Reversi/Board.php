@@ -31,7 +31,7 @@ class Board
     {
         $this->directions = new Directions;
         $this->none = new Player(type: PlayerTypeEnum::NONE, name: '', symbol: '　');
-        $this->cellSeparatorRow = $this->cellSeparatorY . implode($this->cellSeparatorCross, array_fill(0, $this->xMax, $this->cellSeparatorY));
+        $this->cellSeparatorRow = implode($this->cellSeparatorCross, array_fill(0, $this->xMax + 1, $this->cellSeparatorY));
         $this->histories = [];
         for ($row = 1; $row <= $this->yMax; $row++) {
             $this->board[$row - 1] = [];
@@ -55,9 +55,15 @@ class Board
     public function getBoard(): string
     {
         $boardString = '';
-        $boardString .= "　" . implode($this->cellSeparatorX, array_map(fn ($i) => mb_convert_kana((string) $i, 'N'), range(1, $this->xMax))) . PHP_EOL;
+        $prefix = "＼" . $this->cellSeparatorX;
+        $boardString .= $prefix
+            . implode(
+                $this->cellSeparatorX,
+                array_map(fn ($i) => mb_convert_kana((string) $i, 'N'), range(1, $this->xMax))
+            ) . PHP_EOL
+            . $this->cellSeparatorRow . PHP_EOL;
         foreach ($this->board as $rowIndex => $row) {
-            $boardString .= mb_convert_kana((string) ($rowIndex + 1), 'N')
+            $boardString .= mb_convert_kana((string) ($rowIndex + 1), 'N') . $this->cellSeparatorX
                 . implode($this->cellSeparatorX, array_map(fn($c) => $c->getPlayer()->getSymbol(), $row)) . PHP_EOL
                 . ($rowIndex !== ($this->yMax - 1) ? $this->cellSeparatorRow . PHP_EOL : '');
         }
@@ -101,9 +107,12 @@ class Board
         return $this->board[$rowIndex][$colIndex]?->getPlayer() ?? null;
     }
 
-    public function setCell(Cell $cell, string $comment): void
+    public function setCell(?Cell $cell = null, string $comment = ""): void
     {
-        $this->board[$cell->getRow() - 1][$cell->getCol() - 1] = $cell;
+        if (! is_null($cell)) {
+            $this->board[$cell->getRow() - 1][$cell->getCol() - 1] = $cell;
+            $this->flipCellsAround($cell);
+        }
         $this->setHistory($cell, $comment);
     }
 
@@ -117,8 +126,7 @@ class Board
             $cell->flip($currentPlayer);
         }
         // ボードが埋まっているかをチェック
-        $availableCells = $this->getAvailableCells();
-        if (empty($availableCells)) {
+        if ($this->isFull()) {
             return new BoardResult(BoardResultEnum::DRAW);
         }
         return new BoardResult(BoardResultEnum::IN_GAME);
@@ -201,6 +209,14 @@ class Board
         return $flippableCells;
     }
 
+    public function flipCellsAround(Cell $cell): void
+    {
+        foreach ($this->getFlippableCells($cell, $cell->getPlayer()) as $flippableCell) {
+            $flippableCell->flip($cell->getPlayer());
+            $this->board[$flippableCell->getRow() - 1][$flippableCell->getCol() - 1] = $flippableCell;
+        }
+    }
+
     /**
      * ボードがすべて埋まっているか判定
      */
@@ -216,7 +232,7 @@ class Board
         return true;
     }
 
-    public function setHistory(Cell $cell, string $comment): void
+    public function setHistory(?Cell $cell = null, string $comment = ""): void
     {
         $this->histories[] = [
             'cell' => $cell,
