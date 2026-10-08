@@ -15,7 +15,7 @@ class Board
     public string $cellSeparatorY = 'ー';
     public string $cellSeparatorCross = '＋';
     public string $cellSeparatorRow = '';
-    protected array $board = [];
+    public array $board = [];
     protected array $histories = [];
     protected Directions $directions;
 
@@ -39,13 +39,14 @@ class Board
                 $this->board[$row - 1][$col - 1] = new Cell($row, $col, $this->none);
             }
         }
+        // 初期配置
         $row1 = $this->yMax / 2;
         $row2 = $row1 + 1;
         $col1 = $this->xMax / 2;
         $col2 = $col1 + 1;
         $this->board[$row1 - 1][$col1 - 1] = new Cell($row1, $col1, $this->players[0]);
-        $this->board[$row1 - 1][$col2 - 1] = new Cell($row2, $col2, $this->players[1]);
-        $this->board[$row2 - 1][$col1 - 1] = new Cell($row1, $col1, $this->players[1]);
+        $this->board[$row1 - 1][$col2 - 1] = new Cell($row1, $col2, $this->players[1]);
+        $this->board[$row2 - 1][$col1 - 1] = new Cell($row2, $col1, $this->players[1]);
         $this->board[$row2 - 1][$col2 - 1] = new Cell($row2, $col2, $this->players[0]);
     }
 
@@ -54,6 +55,7 @@ class Board
      */
     public function getBoard(): string
     {
+        // 盤面が広いので行列番号も表示
         $boardString = '';
         $prefix = "＼" . $this->cellSeparatorX;
         $boardString .= $prefix
@@ -117,28 +119,12 @@ class Board
     }
 
     /**
-     * セル選択後の結果判定
-     */
-    public function checkResult(Player $currentPlayer): BoardResult
-    {
-        // 対象セルをひっくり返す
-        foreach ($this->getFlippableCells($currentPlayer) as $cell) {
-            $cell->flip($currentPlayer);
-        }
-        // ボードが埋まっているかをチェック
-        if ($this->isFull()) {
-            return new BoardResult(BoardResultEnum::DRAW);
-        }
-        return new BoardResult(BoardResultEnum::IN_GAME);
-    }
-
-    /**
      * 指定セルの指定方向の隣接セルを取得
      */
     public function getNeighboringCell(Cell $cell, Direction $direction): ?Cell
     {
-        $row = $cell->getRow() + $direction->dy;
-        $col = $cell->getCol() + $direction->dx;
+        $row = $cell->getRow() + $direction->dr;
+        $col = $cell->getCol() + $direction->dc;
         if ($this->isValidCellRange($row, $col)) {
             return $this->board[$row - 1][$col - 1];
         }
@@ -146,7 +132,7 @@ class Board
     }
 
     /**
-     * 指定セルが指定方向において指定プレイヤーにとってひっくり返せるかを判定
+     * 指定方向に見て指定セルが指定プレイヤーにとってひっくり返せるかを判定
      */
     public function isFlippable(Cell $cell, Player $player, Direction $direction): bool
     {
@@ -189,10 +175,11 @@ class Board
     /**
      * 指定セルを起点に指定プレイヤーがひっくりかえせるセルをすべて取得
      */
-    public function getFlippableCells(Cell $cell, Player $player): array
+    public function getFlippableCells(Cell $baseCell, Player $player): array
     {
         $flippableCells = [];
         foreach ($this->directions->get() as $direction) {
+            $cell = $baseCell;
             while (true) {
                 $neighbor = $this->getNeighboringCell($cell, $direction);
                 if (is_null($neighbor)) {
@@ -230,6 +217,42 @@ class Board
             }
         }
         return true;
+    }
+
+    public function getCellCounts(): array
+    {
+        $counts = [];
+        foreach ($this->players as $player) {
+            $counts[$player->getCode()] = 0;
+        }
+        foreach ($this->board as $row) {
+            foreach ($row as $cell) {
+                if (! $cell->isEmpty()) {
+                    $counts[$cell->getPlayer()->getCode()]++;
+                }
+            }
+        }
+        return $counts;
+    }
+
+    /**
+     * セル選択後の結果判定
+     */
+    public function checkResult(Player $currentPlayer): BoardResult
+    {
+        // ボードが埋まっているかをチェック
+        if ($this->isFull()) {
+            $counts = $this->getCellCounts();
+            $opponent = array_values(array_filter($this->players, fn ($p) => $p->getCode() !== $currentPlayer->getCode()))[0];
+            if ($counts[$currentPlayer->getCode()] === $counts[$opponent->getCode()]) {
+                return new BoardResult(BoardResultEnum::DRAW, counts: $counts);
+            } elseif ($counts[$currentPlayer->getCode()] > $counts[$opponent->getCode()]) {
+                return new BoardResult(BoardResultEnum::WIN, $currentPlayer, counts: $counts);
+            } else {
+                return new BoardResult(BoardResultEnum::WIN, $opponent, counts: $counts);
+            }
+        }
+        return new BoardResult(BoardResultEnum::IN_GAME);
     }
 
     public function setHistory(?Cell $cell = null, string $comment = ""): void

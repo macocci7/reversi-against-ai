@@ -239,15 +239,17 @@ class ReversiLogic
             break;
         }
 
-        $cell = new Cell($cell[0], $cell[1], $currentPlayer);
+        if (! empty($availableCells)) {
+            $cell = new Cell($cell[0], $cell[1], $currentPlayer);
+            $this->board->setCell($cell, $this->option->noConversation ? "" : $comment);
 
-        Colorizer::attributes(["bold"])->background("#0000aa")->foreground("#ffffff")->echo(" AIが選んだセル ");
-        echo " " . $cell->getRow() . "行 " . $cell->getCol() . "列" . PHP_EOL;
+            Colorizer::attributes(["bold"])->background("#0000aa")->foreground("#ffffff")->echo(" AIが選んだセル ");
+            echo " " . $cell->getRow() . "行 " . $cell->getCol() . "列" . PHP_EOL;
+        }
         if (! $this->option->noConversation) {
             Colorizer::attributes(["bold"])->background("#ffff00")->foreground("#0000ff")->echo(" AIのコメント　 ");
             echo " " . $comment . PHP_EOL;
         }
-        $this->board->setCell($cell, $this->option->noConversation ? "" : $comment);
         return $cell;
     }
 
@@ -289,6 +291,7 @@ class ReversiLogic
         }
         $this->isGameOver = true;
         $this->displayBoard();
+        $this->displayCellCounts($result);
         if ($result->isWin()) {
             $this->gameResults->append(new GameResult($currentPlayer));
             $this->resultText = $currentPlayer->getSymbol() . $currentPlayer->getName() . "が勝ちました✨🎉🎊";
@@ -307,6 +310,19 @@ class ReversiLogic
             ->foreground("#ffffff")
             ->echo(" ボードの状況　 ", PHP_EOL);
         echo $this->board->getBoard() . PHP_EOL;
+    }
+
+    public function displayCellCounts(BoardResult $result): void
+    {
+        Colorizer::attributes(["bold"])
+            ->background("#000099")
+            ->foreground("#ffffff")
+            ->echo(" セルの数 ");
+        echo PHP_EOL;
+        foreach ($result->counts as $playerCode => $count) {
+            $player = array_values(array_filter($this->players, fn($p) => $p->getCode() === $playerCode))[0];
+            echo $player->getSymbol() . $player->getName() . "：" . $count . PHP_EOL;
+        }
     }
 
     public function getComments(): void

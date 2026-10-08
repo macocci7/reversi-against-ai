@@ -13,6 +13,7 @@ class BoardResult
     public function __construct(
         public BoardResultEnum $result, // ボードの結果
         public ?Player $winner = null,  // 勝者
+        public array $counts = [], // 各プレイヤーのセル数
     ) {
     }
 
