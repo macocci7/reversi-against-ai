@@ -1,12 +1,12 @@
-# AI対戦３並べ (Powered by Laravel AI SDK)
+# AI対戦リバーシ (Powered by Laravel AI SDK)
 
-AI対戦３並べのCLI版です。
+AI対戦リバーシのCLI版です。
 
 Laravel(13) AI SDKで作ったデモプロジェクトです。
 
 人間プレイヤー対AIモード、AI対AIモードがあります。
 
-<img src="tic-tac-toe-against-ai-20260919.png" title="AI対戦３並べ" width="600" />
+<img src="reversi-against-ai-01.png" title="AI対戦リバーシ" width="600" />
 
 ## 前提
 - 対応言語：日本語
@@ -21,18 +21,18 @@ Laravel(13) AI SDKで作ったデモプロジェクトです。
 
 ▼Gitが使える場合
 ```bash
-git clone https://github.com/macocci7/tic-tac-toe-against-ai.git
+git clone https://github.com/macocci7/reversi-against-ai.git
 ```
 
 ▼Gitが使えない場合
-- https://github.com/macocci7/tic-tac-toe-against-ai を開く。
+- https://github.com/macocci7/reversi-against-ai を開く。
 - 画面上部緑色の「Code」ボタンから「Download ZIP」を選択。
 - ダウンロードしたZIPを展開。
 
 ローカルにコピーしたリポジトリのフォルダに入ります。
 
 ```bash
-cd tic-tac-toe-against-ai
+cd reversi-against-ai
 ```
 
 次のコマンドで依存関係をインストールしてください。
@@ -55,7 +55,7 @@ CLI上でコマンドで実行します。
 ▼コマンド書式
 ```
 Usage:
-  play:tic-tac-toe [options] [--] [<provider> [<model>]]
+  play:reversi [options] [--] [<provider> [<model>]]
 
 Arguments:
   provider                     AIプロバイダー (例 openai, ollama)
@@ -75,12 +75,12 @@ Options:
 
 ▼コマンド例
 ```
-php artisan play:tic-tac-toe
-php artisan play:tic-tac-toe openai
-php artisan play:tic-tac-toe ollama gemma3:1b
-php artisan play:tic-tac-toe --no-conversation
-php artisan play:tic-tac-toe --ai-vs-ai
-php artisan play:tic-tac-toe --ai-vs-ai \
+php artisan play:reversi
+php artisan play:reversi openai
+php artisan play:reversi ollama gemma3:1b
+php artisan play:reversi --no-conversation
+php artisan play:reversi --ai-vs-ai
+php artisan play:reversi --ai-vs-ai \
     --provider1=ollama --model1=gemma3:1b \
     --provider2=ollama --model2=llama3.2:3b
 ```
@@ -101,6 +101,10 @@ AI対AIモードの場合、`provider`と`model`は無視され `provider1`, `mo
 AI対AIモードで `provider1`, `model1`, `provider2`, `model2` のいずれかが省略された場合、
 
 補完入力が表示され、それぞれ指定できるようになっています。
+
+ゲーム終了時にゲーム結果とトークン使用量が表示されます。
+
+<img src="reversi-against-ai-02.png" title="AI対戦リバーシ" width="600" />
 
 ## LICENSE
 
