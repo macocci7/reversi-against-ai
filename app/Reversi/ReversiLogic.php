@@ -155,8 +155,11 @@ class ReversiLogic
     {
         $availableCells = $this->board->getAvailableCells($currentPlayer);
         if (empty($availableCells)) {
+            Colorizer::background("default")
+                ->foreground("#00ffff")
+                ->echo("ターン {$turn}、" . $currentPlayer->getName() . "の番です。", PHP_EOL);
             warning("配置できるセルがありません。パスします。");
-            $cell = null;   // パス
+            $cell = new Pass($currentPlayer);   // パス
         } else {
             $options = array_map(fn($c) => $c->getRow() . '行 ' . $c->getCol() . '列', $availableCells);
             $choice = select(

@@ -109,9 +109,9 @@ class Board
         return $this->board[$rowIndex][$colIndex]?->getPlayer() ?? null;
     }
 
-    public function setCell(?Cell $cell = null, string $comment = ""): void
+    public function setCell(Cell|Pass $cell, string $comment = ""): void
     {
-        if (! is_null($cell)) {
+        if ($cell instanceof Cell) {
             $this->board[$cell->getRow() - 1][$cell->getCol() - 1] = $cell;
             $this->flipCellsAround($cell);
         }
@@ -243,9 +243,10 @@ class Board
      */
     public function checkResult(Player $currentPlayer): BoardResult
     {
-        // ボードが埋まっているかをチェック
-        if ($this->isFull()) {
-            $counts = $this->getCellCounts();
+        // 各プレイヤーのセル数取得
+        $counts = $this->getCellCounts();
+        // ボードが埋まっているか、または片方が全滅かをチェック
+        if ($this->isFull() || in_array(0, $counts)) {
             $opponent = array_values(array_filter($this->players, fn ($p) => $p->getCode() !== $currentPlayer->getCode()))[0];
             if ($counts[$currentPlayer->getCode()] === $counts[$opponent->getCode()]) {
                 return new BoardResult(BoardResultEnum::DRAW, counts: $counts);
@@ -258,7 +259,7 @@ class Board
         return new BoardResult(BoardResultEnum::IN_GAME);
     }
 
-    public function setHistory(?Cell $cell = null, string $comment = ""): void
+    public function setHistory(Cell|Pass $cell, string $comment = ""): void
     {
         $this->histories[] = [
             'cell' => $cell,
