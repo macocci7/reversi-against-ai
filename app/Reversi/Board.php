@@ -144,6 +144,9 @@ class Board
             if (is_null($neighbor)) {
                 return false;
             }
+            if ($neighbor->isEmpty()) {
+                return false;
+            }
             if ($neighbor->getPlayer()->isSelf($player)) {
                 return true;
             } else {
