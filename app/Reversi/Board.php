@@ -245,9 +245,12 @@ class Board
     {
         // 各プレイヤーのセル数取得
         $counts = $this->getCellCounts();
-        // ボードが埋まっているか、または片方が全滅かをチェック
-        if ($this->isFull() || in_array(0, $counts)) {
-            $opponent = array_values(array_filter($this->players, fn ($p) => $p->getCode() !== $currentPlayer->getCode()))[0];
+        // 各プレイヤーがパスかどうか
+        $opponent = array_values(array_filter($this->players, fn ($p) => $p->getCode() !== $currentPlayer->getCode()))[0];
+        $isCurrentPlayerPass = empty($this->getAvailableCells($currentPlayer));
+        $isOpponentPass = empty($this->getAvailableCells($opponent));
+        // ボードが埋まっているか、または片方が全滅か、または両方がパスかをチェック
+        if ($this->isFull() || in_array(0, $counts) || ($isCurrentPlayerPass && $isOpponentPass)) {
             if ($counts[$currentPlayer->getCode()] === $counts[$opponent->getCode()]) {
                 return new BoardResult(BoardResultEnum::DRAW, counts: $counts);
             } elseif ($counts[$currentPlayer->getCode()] > $counts[$opponent->getCode()]) {

@@ -296,8 +296,9 @@ class ReversiLogic
         $this->displayBoard();
         $this->displayCellCounts($result);
         if ($result->isWin()) {
-            $this->gameResults->append(new GameResult($currentPlayer));
-            $this->resultText = $currentPlayer->getSymbol() . $currentPlayer->getName() . "が勝ちました✨🎉🎊";
+            $winner = $result->getWinner();
+            $this->gameResults->append(new GameResult($winner));
+            $this->resultText = $winner->getSymbol() . $winner->getName() . "が勝ちました✨🎉🎊";
         }
         if ($result->isDraw()) {
             $this->gameResults->append(new GameResult);
