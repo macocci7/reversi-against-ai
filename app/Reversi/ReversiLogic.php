@@ -7,10 +7,11 @@ use App\Ai\Agents\Reversi\ReversiCommentAgent;
 use App\Enums\Reversi\PlayerTypeEnum;
 use Illuminate\Support\Str;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Responses\AgentResponse;
 use Macocci7\BashColorizer\Colorizer;
 
-use function Laravel\Prompts\{spin, text, select, warning, error};
+use function Laravel\Prompts\{spin, text, select, warning, error, confirm};
 
 class ReversiLogic
 {
@@ -20,6 +21,7 @@ class ReversiLogic
     public int $yMax = 8;   // 縦方向のマス目の数
     public Player $initialValue;
     public bool $isGameOver = false;
+    public bool $isAborted = false;
     public int $playCount = 0;
     public int $yourWins = 0;
     public int $draws = 0;
@@ -119,7 +121,9 @@ class ReversiLogic
     {
         $this->playCount++;
         $this->isGameOver = false;
+        $this->isAborted = false;
         $this->userComment = "";
+
         $this->board = new Board(xMax: $this->xMax, yMax: $this->yMax, players: $this->players);
     }
 
@@ -201,10 +205,15 @@ class ReversiLogic
         while (true) {
             if ($i >= $maxAttempts) {
                 error("これ以上の再試行は無駄なので終了します。残念です😭");
-                exit;
+                $this->isAborted = true;
+                $this->isGameOver = true;
+                return null;
             }
             $i++;
             $response = $this->getAisChoice($currentPlayer, $error);
+            if (empty($response)) {
+                return null;
+            }
             $this->usages->append($response);
             $choice = (string) $response;
             if (empty($choice)) {
@@ -232,7 +241,9 @@ class ReversiLogic
             $who = $this->board->whoChoseCell(...$cell);
             if (is_null($who)) {
                 error("AIが選択したセル[" . $cell[0] . ", " . $cell[1] . "]の情報を取得できませんでした。処理を中止します🚫");
-                exit;
+                $this->isAborted = true;
+                $this->isGameOver = true;
+                return null;
             }
             if (! $who->isNone()) {
                 $error = "AIが選択したセル[" . $cell[0] . ", " . $cell[1] . "]は既に" . $who->getName() . "が選択済なので選べません。選びなおしてください。";
@@ -259,28 +270,44 @@ class ReversiLogic
     /**
      * AIのセル選択取得
      */
-    protected function getAisChoice(Player $currentPlayer, string $error = ""): AgentResponse
+    protected function getAisChoice(Player $currentPlayer, string $error = ""): ?AgentResponse
     {
         $availableCells = $this->board->getAvailableCells($currentPlayer);
-        return spin(
-            callback: fn () => (new ReversiAgent($this->option->noConversation))
-                ->setAvailableCells($availableCells)
-                ->setInstructions(view('reversi.instructions.choose', [
-                    'ai' => $currentPlayer,
-                    'opponent' => array_values(array_filter($this->players, fn($p) => $p->getCode() !== $currentPlayer->getCode()))[0],
-                ]))
-                ->prompt(view('reversi.prompts.choose', [
-                        'board' => $this->board->getBoard(),
-                        'players' => $this->players,
-                        'availableCells' => $availableCells,
-                        'error' => $error,
-                        'userComment' => $this->userComment,
-                    ]),
-                    provider: $currentPlayer->getProvider(),
-                    model: $currentPlayer->getModel(),
-                ),
-            message: "考え中・・・",
-        );
+        $i = 0;
+        $maxAttempts = config("reversi.connection_attempts");
+        while ($i < $maxAttempts) {
+            $i++;
+            try {
+                $response = spin(
+                    callback: fn () => (new ReversiAgent($this->option->noConversation))
+                        ->setAvailableCells($availableCells)
+                        ->setInstructions(view('reversi.instructions.choose', [
+                            'ai' => $currentPlayer,
+                            'opponent' => array_values(array_filter($this->players, fn($p) => $p->getCode() !== $currentPlayer->getCode()))[0],
+                        ]))
+                        ->prompt(view('reversi.prompts.choose', [
+                                'board' => $this->board->getBoard(),
+                                'players' => $this->players,
+                                'availableCells' => $availableCells,
+                                'error' => $error,
+                                'userComment' => $this->userComment,
+                            ]),
+                            provider: $currentPlayer->getProvider(),
+                            model: $currentPlayer->getModel(),
+                            timeout: config("reversi.timeout"),
+                        ),
+                    message: "考え中・・・",
+                );
+            } catch (ProviderConnectionException $e) {
+                error("AI[" . $currentPlayer->getName() . "]への接続に失敗しました。（{$i}回目）");
+                if (($i === $maxAttempts) || ! confirm("再接続しますか？")) {
+                    $this->isAborted = true;
+                    $this->isGameOver = true;
+                    return null;
+                }
+            }
+        }
+        return $response ?? null;
     }
 
     /**
@@ -321,8 +348,7 @@ class ReversiLogic
         Colorizer::attributes(["bold"])
             ->background("#000099")
             ->foreground("#ffffff")
-            ->echo(" セルの数 ");
-        echo PHP_EOL;
+            ->echo(" セルの数 ", PHP_EOL);
         foreach ($result->counts as $playerCode => $count) {
             $player = array_values(array_filter($this->players, fn($p) => $p->getCode() === $playerCode))[0];
             echo $player->getSymbol() . $player->getName() . "：" . $count . PHP_EOL;
@@ -347,23 +373,37 @@ class ReversiLogic
 
     protected function getAisComment(Player $currentPlayer): void
     {
-        $response = spin(
-            callback: fn () => (new ReversiCommentAgent)
-                ->setInstructions(view('reversi.instructions.comment', [
-                    'ai' => $currentPlayer,
-                    'opponent' => array_values(array_filter($this->players, fn($p) => $p->getCode() !== $currentPlayer->getCode()))[0],
-                ]))
-                ->prompt(view('reversi.prompts.comment', [
-                        'userComment' => $this->userComment,
-                        'players' => $this->players,
-                        'histories' => $this->board->getHistories(),
-                        'resultText' => $this->resultText,
-                    ]),
-                    provider: $currentPlayer->getProvider(),
-                    model: $currentPlayer->getModel(),
-                ),
-            message: $currentPlayer->getName() . "のコメントを取得中...",
-        );
+        $i = 0;
+        $maxAttempts = config("reversi.connection_attempts");
+        while ($i < $maxAttempts) {
+            $i++;
+            try {
+                $response = spin(
+                    callback: fn () => (new ReversiCommentAgent)
+                        ->setInstructions(view('reversi.instructions.comment', [
+                            'ai' => $currentPlayer,
+                            'opponent' => array_values(array_filter($this->players, fn($p) => $p->getCode() !== $currentPlayer->getCode()))[0],
+                        ]))
+                        ->prompt(view('reversi.prompts.comment', [
+                                'userComment' => $this->userComment,
+                                'players' => $this->players,
+                                'histories' => $this->board->getHistories(),
+                                'resultText' => $this->resultText,
+                            ]),
+                            provider: $currentPlayer->getProvider(),
+                            model: $currentPlayer->getModel(),
+                        ),
+                    message: $currentPlayer->getName() . "のコメントを取得中...",
+                );
+            } catch (ProviderConnectionException $e) {
+                error("AI[" . $currentPlayer->getName() . "]への接続に失敗しました。（{$i}回目）");
+                if (($i === $maxAttempts) || ! confirm("再接続しますか？")) {
+                    $this->isAborted = true;
+                    $this->isGameOver = true;
+                    return;
+                }
+            }
+        }
         $this->usages->append($response);
         $this->userComment = (string) $response;
         Colorizer::attributes(["bold"])
@@ -389,6 +429,9 @@ class ReversiLogic
             $currentPlayer = $this->players[$i];
             $this->displayBoard();
             $this->decideCell($currentPlayer, $turn);
+            if ($this->isAborted) {
+                return;
+            }
             $this->checkResult($currentPlayer);
         }
         if (! $this->option->noConversation) {
@@ -433,7 +476,12 @@ class ReversiLogic
             ->background("#ffaa00")
             ->foreground("#000000")
             ->echo(" トークン使用量 ", PHP_EOL);
-        foreach ($this->usages->summary() as $usage) {
+        $usages = $this->usages->summary();
+        if (empty($usages)) {
+            echo "（なし）" . PHP_EOL;
+            return;
+        }
+        foreach ($usages as $usage) {
             $lv = max(array_map(fn ($v) => strlen($v), [
                 number_format($usage["inputTokens"]),
                 number_format($usage["outputTokens"]),
