@@ -137,7 +137,7 @@ class ReversiLogic
         shuffle($this->players);
         foreach($this->players as $index => $player) {
             Colorizer::foreground("#00aa00")
-                ->echo(($index === 0 ? "先攻" : "後攻") . ": " . $player->getName(), PHP_EOL);
+                ->echo(($index === 0 ? "先攻" : "後攻") . ": " . $player->getSymbol() . $player->getName(), PHP_EOL);
         }
     }
 
@@ -194,7 +194,7 @@ class ReversiLogic
     {
         Colorizer::background("default")
             ->foreground("#00ffff")
-            ->echo("ターン {$turn}、" . $currentPlayer->getName() . "の番です。", PHP_EOL);
+            ->echo("ターン {$turn}、" . $currentPlayer->getSymbol() . $currentPlayer->getName() . "の番です。", PHP_EOL);
         $availableCells = $this->board->getAvailableCells($currentPlayer);
         if (empty($availableCells)) {
             warning("配置できるセルがありません。パスします。");
@@ -375,6 +375,8 @@ class ReversiLogic
     {
         $i = 0;
         $maxAttempts = config("reversi.connection_attempts");
+        $histories = $this->board->getHistories();
+        $lastTurn = count($histories);
         while ($i < $maxAttempts) {
             $i++;
             try {
@@ -387,7 +389,8 @@ class ReversiLogic
                         ->prompt(view('reversi.prompts.comment', [
                                 'userComment' => $this->userComment,
                                 'players' => $this->players,
-                                'histories' => $this->board->getHistories(),
+                                'lastTurn' => $lastTurn,
+                                'history' => array_pop($histories),
                                 'resultText' => $this->resultText,
                             ]),
                             provider: $currentPlayer->getProvider(),
