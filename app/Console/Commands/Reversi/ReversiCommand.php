@@ -30,6 +30,9 @@ class ReversiCommand extends Command
         $logic->setPlayers();
         while (true) {
             $logic->play();
+            if ($logic->isAborted) {
+                break;
+            }
             if (! confirm("続けますか？")) {
                 break;
             }
