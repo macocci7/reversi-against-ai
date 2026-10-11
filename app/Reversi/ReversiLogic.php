@@ -399,6 +399,7 @@ class ReversiLogic
                         ),
                     message: $currentPlayer->getName() . "のコメントを取得中...",
                 );
+                break;
             } catch (ProviderConnectionException $e) {
                 error("AI[" . $currentPlayer->getName() . "]への接続に失敗しました。（{$i}回目）");
                 if (($i === $maxAttempts) || ! confirm("再接続しますか？")) {
