@@ -265,7 +265,7 @@ class Board
     public function setHistory(Cell|Pass $cell, string $comment = ""): void
     {
         $this->histories[] = [
-            'cell' => $cell,
+            'cell' => new Cell($cell->getRow(), $cell->getCol(), $cell->getPlayer()),
             'comment' => $comment,
             'board' => $this->getBoard(),
         ];
