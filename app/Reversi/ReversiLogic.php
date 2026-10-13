@@ -144,9 +144,9 @@ class ReversiLogic
     /**
      * セル選択分岐
      */
-    public function decideCell(Player $currentPlayer, int $turn): ?Cell
+    public function decideCell(Player $currentPlayer, int $turn): void
     {
-        return match ($currentPlayer->getType()) {
+        match ($currentPlayer->getType()) {
             PlayerTypeEnum::HUMAN => $this->humanDecidesCell($currentPlayer, $turn),
             PlayerTypeEnum::AI => $this->aiDecidesCell($currentPlayer, $turn),
         };
@@ -155,7 +155,7 @@ class ReversiLogic
     /**
      * 人間プレイヤーのセル選択
      */
-    public function humanDecidesCell(Player $currentPlayer, int $turn): ?Cell
+    public function humanDecidesCell(Player $currentPlayer, int $turn): void
     {
         $availableCells = $this->board->getAvailableCells($currentPlayer);
         if (empty($availableCells)) {
@@ -184,13 +184,12 @@ class ReversiLogic
             ) ?? "";
         }
         $this->board->setCell($cell, $this->userComment);
-        return $cell;
     }
 
     /**
      * AIのセル選択
      */
-    public function aiDecidesCell(Player $currentPlayer, int $turn): ?Cell
+    public function aiDecidesCell(Player $currentPlayer, int $turn): void
     {
         Colorizer::background("default")
             ->foreground("#00ffff")
@@ -207,12 +206,12 @@ class ReversiLogic
                 error("これ以上の再試行は無駄なので終了します。残念です😭");
                 $this->isAborted = true;
                 $this->isGameOver = true;
-                return null;
+                return;
             }
             $i++;
             $response = $this->getAisChoice($currentPlayer, $error);
             if (empty($response)) {
-                return null;
+                return;
             }
             $this->usages->append($response);
             $choice = (string) $response;
@@ -243,7 +242,7 @@ class ReversiLogic
                 error("AIが選択したセル[" . $cell[0] . ", " . $cell[1] . "]の情報を取得できませんでした。処理を中止します🚫");
                 $this->isAborted = true;
                 $this->isGameOver = true;
-                return null;
+                return;
             }
             if (! $who->isNone()) {
                 $error = "AIが選択したセル[" . $cell[0] . ", " . $cell[1] . "]は既に" . $who->getName() . "が選択済なので選べません。選びなおしてください。";
@@ -253,18 +252,19 @@ class ReversiLogic
             break;
         }
 
-        if (! empty($availableCells)) {
+        if (empty($availableCells)) {
+            $cell = new Pass($currentPlayer);
+        } else {
             $cell = new Cell($cell[0], $cell[1], $currentPlayer);
-            $this->board->setCell($cell, $this->option->noConversation ? "" : $comment);
 
             Colorizer::attributes(["bold"])->background("#0000aa")->foreground("#ffffff")->echo(" AIが選んだセル ");
             echo " " . $cell->getRow() . "行 " . $cell->getCol() . "列" . PHP_EOL;
         }
+        $this->board->setCell($cell, $this->option->noConversation ? "" : $comment);
         if (! $this->option->noConversation) {
             Colorizer::attributes(["bold"])->background("#ffff00")->foreground("#0000ff")->echo(" AIのコメント　 ");
             echo " " . $comment . PHP_EOL;
         }
-        return $cell;
     }
 
     /**
