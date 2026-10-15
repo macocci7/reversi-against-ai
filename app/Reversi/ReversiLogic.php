@@ -195,9 +195,36 @@ class ReversiLogic
             ->foreground("#00ffff")
             ->echo("ターン {$turn}、" . $currentPlayer->getSymbol() . $currentPlayer->getName() . "の番です。", PHP_EOL);
         $availableCells = $this->board->getAvailableCells($currentPlayer);
-        if (empty($availableCells)) {
+        $shouldPass = empty($availableCells);
+        if ($shouldPass) {
             warning("配置できるセルがありません。パスします。");
         }
+        if (! ($shouldPass && $this->option->noConversation)) {
+            $aisChoice = $this->getValidatedAisChoice($currentPlayer, $availableCells, $shouldPass);
+            if (is_null($aisChoice)) {
+                return;
+            }
+        }
+        if ($shouldPass) {
+            $cell = new Pass($currentPlayer);
+        } else {
+            $cell = $aisChoice->cell;
+
+            Colorizer::attributes(["bold"])->background("#0000aa")->foreground("#ffffff")->echo(" AIが選んだセル ");
+            echo " " . $cell->getRow() . "行 " . $cell->getCol() . "列" . PHP_EOL;
+        }
+        $this->board->setCell($cell, $this->option->noConversation ? "" : $aisChoice->comment);
+        if (! $this->option->noConversation) {
+            Colorizer::attributes(["bold"])->background("#ffff00")->foreground("#0000ff")->echo(" AIのコメント　 ");
+            echo " " . $aisChoice->comment . PHP_EOL;
+        }
+    }
+
+    /**
+     * AIのセル選択を受けてバリデーション済のものを返す
+     */
+    protected function getValidatedAisChoice(Player $currentPlayer, array $availableCells, bool $shouldPass): ?AisChoice
+    {
         $error = "";
         $maxAttempts = 3;
         $i = 0;
@@ -206,12 +233,12 @@ class ReversiLogic
                 error("これ以上の再試行は無駄なので終了します。残念です😭");
                 $this->isAborted = true;
                 $this->isGameOver = true;
-                return;
+                return null;
             }
             $i++;
-            $response = $this->getAisChoice($currentPlayer, $error);
+            $response = $this->getAisChoice($currentPlayer, $availableCells, $shouldPass, $error);
             if (empty($response)) {
-                return;
+                return null;
             }
             $this->usages->append($response);
             $choice = (string) $response;
@@ -224,11 +251,16 @@ class ReversiLogic
             $this->userComment = $choiceDecoded["comment"] ?? "";
             $comment = $choiceDecoded["comment"] ?? "(No comment)";
             $cell = empty($availableCells) ? null : json_decode($choiceDecoded["cell"] ?? "[]", true);
-            if (empty($availableCells)) {
+            if ($shouldPass) {
                 break;  // パス
             }
             if (empty($cell)) {
                 $error = "AIがセルを選択できませんでした。選び直してください。";
+                error($error);
+                continue;
+            }
+            if (! is_array($cell) || count($cell) !== 2 || ! is_int($cell[0]) || ! is_int($cell[1])) {
+                $error = "AIが選択したセルの形式が不正です。選び直してください。";
                 error($error);
                 continue;
             }
@@ -242,7 +274,7 @@ class ReversiLogic
                 error("AIが選択したセル[" . $cell[0] . ", " . $cell[1] . "]の情報を取得できませんでした。処理を中止します🚫");
                 $this->isAborted = true;
                 $this->isGameOver = true;
-                return;
+                return null;
             }
             if (! $who->isNone()) {
                 $error = "AIが選択したセル[" . $cell[0] . ", " . $cell[1] . "]は既に" . $who->getName() . "が選択済なので選べません。選びなおしてください。";
@@ -251,35 +283,24 @@ class ReversiLogic
             }
             break;
         }
-
-        if (empty($availableCells)) {
-            $cell = new Pass($currentPlayer);
-        } else {
-            $cell = new Cell($cell[0], $cell[1], $currentPlayer);
-
-            Colorizer::attributes(["bold"])->background("#0000aa")->foreground("#ffffff")->echo(" AIが選んだセル ");
-            echo " " . $cell->getRow() . "行 " . $cell->getCol() . "列" . PHP_EOL;
-        }
-        $this->board->setCell($cell, $this->option->noConversation ? "" : $comment);
-        if (! $this->option->noConversation) {
-            Colorizer::attributes(["bold"])->background("#ffff00")->foreground("#0000ff")->echo(" AIのコメント　 ");
-            echo " " . $comment . PHP_EOL;
-        }
+        return new AisChoice(
+            cell: $shouldPass ? new Pass($currentPlayer) : new Cell($cell[0], $cell[1], $currentPlayer),
+            comment: $comment,
+        );
     }
 
     /**
      * AIのセル選択取得
      */
-    protected function getAisChoice(Player $currentPlayer, string $error = ""): ?AgentResponse
+    protected function getAisChoice(Player $currentPlayer, array $availableCells, bool $shouldPass, string $error = ""): ?AgentResponse
     {
-        $availableCells = $this->board->getAvailableCells($currentPlayer);
         $i = 0;
         $maxAttempts = config("reversi.connection_attempts");
         while ($i < $maxAttempts) {
             $i++;
             try {
                 $response = spin(
-                    callback: fn () => (new ReversiAgent($this->option->noConversation))
+                    callback: fn () => (new ReversiAgent($this->option->noConversation, $shouldPass))
                         ->setAvailableCells($availableCells)
                         ->setInstructions(view('reversi.instructions.choose', [
                             'ai' => $currentPlayer,
