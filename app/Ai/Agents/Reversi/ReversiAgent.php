@@ -27,6 +27,7 @@ class ReversiAgent implements Agent, Conversational, HasTools, HasStructuredOutp
 
     public function __construct(
         protected bool $noConversation = false,
+        protected bool $shouldPass = false,
     ) {
     }
 
@@ -74,12 +75,14 @@ class ReversiAgent implements Agent, Conversational, HasTools, HasStructuredOutp
      */
     public function schema(JsonSchema $schema): array
     {
-        $returnArray = [    // 選択可能なセル座標を列挙
-            'cell' => $schema->string()
+        $returnArray = [];
+        if (! $this->shouldPass) {
+            // 選択可能なセル座標を列挙
+            $returnArray['cell'] = $schema->string()
                 ->enum(array_map(fn($c) => (string) $c, $this->availableCells)) // [row, col]形式の文字列配列に変換
                 ->description('Select the position of the cell on the Reversi board, [row, col].')
-                ->required(),
-        ];
+                ->required();
+        }            
         if (! $this->noConversation) {
             $returnArray['comment'] = $schema->string()
                 ->description('対戦相手に対するコメント。心理的駆け引きを踏まえて記入してください。謎めいててもいいし、挑発してもいいし、ユーモアを交えても構いません。')
