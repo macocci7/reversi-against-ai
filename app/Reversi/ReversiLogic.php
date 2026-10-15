@@ -450,25 +450,30 @@ class ReversiLogic
     public function displayResults(): void
     {
         $summary = $this->gameResults->summary();
-        $results = [];
-        $results["プレイ回数"] = $summary['plays'];
+        $labels = [];
+        $values = [];
+        $labels[] = "プレイ回数";
+        $values[] = $summary['plays'];
         foreach ($this->players as $player) {
             $wins = $summary['wins'][$player->getCode()] ?? 0;
-            $results[$player->getName() . "の勝利回数"] = $wins;
+            $labels[] = $player->getSymbol() . " " . $player->getName() . "の勝利回数";
+            $values[] = $wins;
         }
-        $results["引き分け回数"] = $summary['draws'];
+        $labels[] = "引き分け回数";
+        $values[] = $summary['draws'];
         foreach ($this->players as $player) {
             $winRate = $summary['winRates'][$player->getCode()] ?? 0;
-            $results[$player->getName() . "の勝率"] = round($winRate * 100, 1) . "%";
+            $labels[] = $player->getSymbol() . " " . $player->getName() . "の勝率";
+            $values[] = round($winRate * 100, 1) . "%";
         }
-        $nk = max(array_map(fn ($v) => CliStr::len($v), array_keys($results)));
-        $nv = max(array_map(fn ($v) => CliStr::len($v), array_values($results)));
+        $nk = max(array_map(fn ($v) => CliStr::len($v), $labels));
+        $nv = max(array_map(fn ($v) => CliStr::len($v), $values));
         Colorizer::attributes(["bold"])
             ->background("#00aa66")
             ->foreground("#ffffff")
             ->echo(" ゲーム結果 ", PHP_EOL);
-        foreach ($results as $label => $value) {
-            echo "- " . CliStr::padLeft($label, $nk) . ": " . CliStr::padLeft($value, $nv) . PHP_EOL;
+        for ($i = 0; $i < count($labels); $i++) {
+            echo "- " . CliStr::padLeft($labels[$i], $nk) . ": " . CliStr::padLeft($values[$i], $nv) . PHP_EOL;
         }
     }
 
